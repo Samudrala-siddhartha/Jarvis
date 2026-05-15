@@ -1,0 +1,6 @@
+{
+  "name": "JARVIS AI",
+  "description": "A cinematic, voice-driven AI assistant for smart-home automation with elite intelligence and real-time visual animations.",
+  "requestFramePermissions": ["camera", "microphone", "bluetooth", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

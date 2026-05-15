@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Validation Blueprints
+    function isValidUser(data) {
+      return data.userId == request.auth.uid 
+        && data.email is string
+        && (data.displayName == null || data.displayName is string)
+        && (data.photoURL == null || data.photoURL is string)
+        && data.keys().hasAll(['userId', 'email'])
+        && data.keys().size() >= 2;
+    }
+
+    function isValidReminder(data) {
+      return data.userId == request.auth.uid
+        && data.text is string && data.text.size() <= 500
+        && data.scheduledAt is timestamp
+        && data.completed is bool
+        && data.keys().hasAll(['userId', 'text', 'scheduledAt', 'completed', 'createdAt'])
+        && data.keys().size() == 5;
+    }
+
+    function isValidInteraction(data) {
+      return data.userId == request.auth.uid
+        && data.command is string && data.command.size() <= 1000
+        && data.response is string && data.response.size() <= 5000
+        && data.timestamp == request.time
+        && data.keys().hasAll(['userId', 'command', 'response', 'timestamp'])
+        && data.keys().size() >= 4;
+    }
+
+    function isValidChat(data) {
+      return data.userId == request.auth.uid
+        && data.role in ['user', 'assistant']
+        && data.content is string && data.content.size() <= 10000
+        && data.timestamp == request.time
+        && data.keys().hasAll(['userId', 'role', 'content', 'timestamp'])
+        && data.keys().size() == 4;
+    }
+
+    function isValidDevice(data) {
+      return data.name is string && data.name.size() <= 100
+        && data.type is string
+        && data.state is map
+        && data.keys().hasAll(['name', 'type', 'state'])
+        && data.keys().size() >= 3;
+    }
+
+    // Rules for collections
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) 
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'theme', 'lastActive']);
+      
+      match /reminders/{reminderId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidReminder(incoming()) && isValidId(reminderId);
+        allow update: if isOwner(userId) && isValidReminder(incoming())
+          && incoming().diff(existing()).affectedKeys().hasOnly(['text', 'scheduledAt', 'completed']);
+        allow delete: if isOwner(userId);
+      }
+
+      match /interactions/{interactionId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidInteraction(incoming());
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /devices/{deviceId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidDevice(incoming()) && isValidId(deviceId);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /chats/{chatId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidChat(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

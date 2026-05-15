@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user preferences and information.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "theme": { "type": "string" },
+        "lastActive": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "reminders": {
+      "title": "Reminder",
+      "description": "Voice-activated or manually created reminders.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "scheduledAt": { "type": "string", "format": "date-time" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "text", "scheduledAt"]
+    },
+    "interactions": {
+      "title": "Voice Interaction",
+      "description": "History of voice commands and AI responses.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "command": { "type": "string" },
+        "response": { "type": "string" },
+        "intent": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "command", "response", "timestamp"]
+    },
+    "chats": {
+      "title": "Chat Message",
+      "description": "Individual messages in a chat conversation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "role", "content", "timestamp"]
+    },
+    "devices": {
+      "title": "Smart Home Device",
+      "description": "Current state of IoT devices.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "state": { "type": "object" },
+        "room": { "type": "string" }
+      },
+      "required": ["name", "type", "state"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "users",
+      "description": "User profile document."
+    },
+    "users/{userId}/reminders/{reminderId}": {
+      "schema": "reminders",
+      "description": "User-specific reminders."
+    },
+    "users/{userId}/interactions/{interactionId}": {
+      "schema": "interactions",
+      "description": "Voice interaction history."
+    },
+    "chats/{chatId}": {
+      "schema": "chats",
+      "description": "Global chat message stream, filtered by userId."
+    },
+    "devices/{deviceId}": {
+      "schema": "devices",
+      "description": "Global smart home device states."
+    }
+  }
+}
