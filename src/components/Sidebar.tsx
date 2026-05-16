@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu as MenuIcon, X, Settings, History, User, Shield, Info, LogOut, ChevronRight, Fingerprint, Activity } from 'lucide-react';
+import { Menu as MenuIcon, X, Settings, History, User, Shield, Info, LogOut, ChevronRight, Fingerprint, Activity, Cpu } from 'lucide-react';
 import { useState } from 'react';
 import { auth, signInWithGoogle, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -112,7 +112,7 @@ export default function Sidebar() {
                       </div>
 
                       {/* Navigation */}
-                      <nav className="flex-1 space-y-2">
+                      <nav className="flex-1 space-y-2 overflow-y-auto pr-2 scrollbar-hide">
                         {menuItems.map((item) => (
                           <button
                             key={item.id}
@@ -127,6 +127,45 @@ export default function Sidebar() {
                             <ChevronRight className="w-4 h-4 opacity-20 group-hover:opacity-100 transition-opacity" />
                           </button>
                         ))}
+
+                        <div className="pt-4 mt-4 border-t border-white/5 space-y-4">
+                          <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2 text-cyan-400">
+                                <Activity className="w-3 h-3" />
+                                <span className="text-[10px] font-mono uppercase tracking-widest">Neural Load</span>
+                              </div>
+                              <span className="text-[10px] font-mono text-cyan-400/60">42%</span>
+                            </div>
+                            <div className="h-1 bg-cyan-950 w-full rounded-full overflow-hidden">
+                              <motion.div 
+                                animate={{ width: ['40%', '45%', '42%'] }}
+                                transition={{ duration: 2, repeat: Infinity }}
+                                className="h-full bg-cyan-500" 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2 text-blue-400">
+                                <Cpu className="w-3 h-3" />
+                                <span className="text-[10px] font-mono uppercase tracking-widest">Core Cycles</span>
+                              </div>
+                              <span className="text-[10px] font-mono text-blue-400/60">STABLE</span>
+                            </div>
+                            <div className="flex gap-1">
+                              {[...Array(8)].map((_, i) => (
+                                <motion.div
+                                  key={i}
+                                  animate={{ opacity: [0.2, 1, 0.2] }}
+                                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.1 }}
+                                  className="h-1 flex-1 bg-blue-500 rounded-full"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </nav>
 
                       {/* Biometric Status */}

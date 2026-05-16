@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Mic, X, MessageSquare, Bot, Paperclip, Volume2, VolumeX, Camera, MicOff } from 'lucide-react';
+import { Send, Mic, X, MessageSquare, Bot, Paperclip, Volume2, VolumeX, Camera, MicOff, Copy, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useVoiceStore, VoiceState } from '../store/voiceStore';
 import { db, auth, OperationType, handleFirestoreError } from '../lib/firebase';
@@ -22,7 +22,7 @@ interface ChatMessage {
  * Supports multimodal input (camera, files), real-time streaming, and vocalization.
  */
 export default function JARVISChat() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isChatOpen: isOpen, setIsChatOpen: setIsOpen, setState, transcript, state: voiceState, isVoiceEnabled: globalVoiceEnabled, setVoiceEnabled } = useVoiceStore();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -35,42 +35,64 @@ export default function JARVISChat() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  const { setState } = useVoiceStore();
   const { processCommandStream, vocalize } = useJarvisApi();
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const [lastScanTime, setLastScanTime] = useState(0);
 
   /**
-   * Initialize speech recognition for the chat terminal
+   * Automatic Mood Sensing: Captures tactical imagery for sentiment analysis
    */
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
+    let interval: NodeJS.Timeout;
+    if (isCameraOpen && isOpen) {
+      interval = setInterval(() => {
+        const now = Date.now();
+        if (now - lastScanTime > 15000 && !isTyping) { // Scan every 15s if not active
+          captureAndSense();
+          setLastScanTime(now);
+        }
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [isCameraOpen, isOpen, isTyping, lastScanTime]);
 
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInput(transcript);
-        handleSend(undefined, transcript);
+  const captureAndSense = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth / 2; // Lower res for scan
+      canvas.height = video.videoHeight / 2;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+      const fileData = {
+        data: dataUrl.split(',')[1],
+        mimeType: 'image/jpeg',
+        name: `biometric_scan_${Date.now()}.jpg`
       };
 
-      recognitionRef.current = recognition;
+      processCommandStream({
+        message: "Perform biometric mood analysis on this visual feed. Shift your mood accordingly. Do not respond with text unless you detect a significant shift in user state.",
+        file: fileData,
+        onChunk: () => {},
+        onComplete: () => {}
+      });
     }
-  }, []);
+  };
 
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      recognitionRef.current?.start();
+  /**
+   * Sync with global transcript when chat is open
+   */
+  useEffect(() => {
+    if (isOpen && voiceState === VoiceState.ACTIVE_LISTENING) {
+      setInput(transcript);
     }
+  }, [transcript, isOpen, voiceState]);
+
+  const toggleGlobalVoice = () => {
+    setVoiceEnabled(!globalVoiceEnabled);
   };
 
   const startCamera = async () => {
@@ -272,6 +294,20 @@ export default function JARVISChat() {
     });
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const downloadAsFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="fixed bottom-6 left-6 z-50">
       <AnimatePresence>
@@ -409,11 +445,29 @@ export default function JARVISChat() {
                   key={i} 
                   className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <div className={`max-w-[85%] p-4 rounded-2xl text-sm font-light ${
+                  <div className={`max-w-[85%] p-4 rounded-2xl text-sm font-light relative group/msg ${
                     msg.role === 'user' 
                       ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-50' 
                       : 'bg-white/5 border border-white/10 text-slate-200'
                   }`}>
+                    {msg.role === 'assistant' && msg.content && (
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => copyToClipboard(msg.content)}
+                          className="p-1 rounded bg-white/5 border border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/30 text-white/40 hover:text-cyan-400 transition-all"
+                          title="Copy Output"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                        <button 
+                          onClick={() => downloadAsFile(msg.content, `jarvis_output_${Date.now()}.md`)}
+                          className="p-1 rounded bg-white/5 border border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/30 text-white/40 hover:text-cyan-400 transition-all"
+                          title="Download Output"
+                        >
+                          <Download className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                     {msg.file && (
                       <div className="mb-3 p-2 bg-black/40 rounded-lg flex items-center gap-2 border border-white/10">
                         <Paperclip className="w-3 h-3 text-cyan-400" />
@@ -491,11 +545,11 @@ export default function JARVISChat() {
                 {!input.trim() && !selectedFile ? (
                    <button 
                     type="button"
-                    onClick={toggleListening}
-                    className={`p-2.5 rounded-xl transition-all ${isListening ? 'bg-red-500/20 text-red-500 border border-red-500/30 animate-pulse' : 'bg-white/5 text-cyan-400 border border-white/10 hover:border-cyan-400/30 shadow-[0_0_10px_rgba(6,182,212,0.1)]'}`}
+                    onClick={toggleGlobalVoice}
+                    className={`p-2.5 rounded-xl transition-all ${globalVoiceEnabled ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:border-white/30'}`}
                     id="voice-input-btn"
                   >
-                    {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    {globalVoiceEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
                   </button>
                 ) : (
                   <button 

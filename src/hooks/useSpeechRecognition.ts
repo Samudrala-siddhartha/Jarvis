@@ -10,19 +10,24 @@ export function useSpeechRecognition({
   onCommand, 
   wakeWords = ['jarvis', 'hey jarvis', 'hello jarvis'] 
 }: UseSpeechRecognitionProps = {}) {
-  const { state, setState, setTranscript, isWakeEnabled, setErrorMessage } = useVoiceStore();
+  const { state, setState, setTranscript, isWakeEnabled, isVoiceEnabled, setVoiceEnabled, setErrorMessage } = useVoiceStore();
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
   const isReconnectingRef = useRef(false);
   const lastStartTimestamp = useRef(0);
 
+  const onCommandRef = useRef(onCommand);
+  useEffect(() => {
+    onCommandRef.current = onCommand;
+  }, [onCommand]);
+
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onend = null;
         recognitionRef.current.onerror = null; // Clean up error handler too
-        recognitionRef.current.stop();
+        recognitionRef.current.abort(); // Use abort instead of stop for immediate termination
       } catch (e) {}
     }
   }, []);
@@ -86,8 +91,16 @@ export function useSpeechRecognition({
         
         // Stabilized VAD Recalibration: 1200ms silence timeout
         silenceTimerRef.current = setTimeout(() => {
-          if (useVoiceStore.getState().transcript.length > 0) {
-            onCommand?.(useVoiceStore.getState().transcript);
+          const currentTranscript = useVoiceStore.getState().transcript;
+          if (currentTranscript.length > 0) {
+            onCommandRef.current?.(currentTranscript);
+          } else {
+            // No command received, terminate as requested
+            console.log('[JARVIS] Signal lost. Terminating neural link.');
+            setVoiceEnabled(false);
+            if (useVoiceStore.getState().state !== VoiceState.IDLE) {
+              setState(VoiceState.IDLE);
+            }
           }
         }, 1200); 
       }
@@ -123,9 +136,9 @@ export function useSpeechRecognition({
 
     req.onend = () => {
       const currentState = useVoiceStore.getState().state;
-      const isWake = useVoiceStore.getState().isWakeEnabled;
+      const { isWakeEnabled: isWake, isVoiceEnabled: isVoice } = useVoiceStore.getState();
       
-      if (isReconnectingRef.current) return;
+      if (isReconnectingRef.current || !isVoice) return;
 
       if (isWake || currentState === VoiceState.ACTIVE_LISTENING || currentState === VoiceState.ERROR) {
         // Stabilized Watchdog Logic: 5-second back-off delay on error/restart
@@ -158,7 +171,7 @@ export function useSpeechRecognition({
 
     recognitionRef.current = req;
     return req;
-  }, [wakeWords, setState, setTranscript, onCommand, setErrorMessage]);
+  }, [wakeWords, setState, setTranscript, setErrorMessage]); // Removed onCommand from dependency array
 
   const reconnect = useCallback(() => {
     if (isReconnectingRef.current) return;
@@ -196,21 +209,36 @@ export function useSpeechRecognition({
   reconnectRef.current = reconnect;
 
   useEffect(() => {
-    const recognition = initRecognition();
-    if (recognition && useVoiceStore.getState().state !== VoiceState.ERROR) {
-      try {
-        recognition.start();
-      } catch (e) {}
+    const currentState = useVoiceStore.getState().state;
+    
+    if (isVoiceEnabled) {
+      if (currentState === VoiceState.IDLE) {
+        const recognition = initRecognition();
+        if (recognition) {
+          try {
+            recognition.start();
+            setState(VoiceState.ACTIVE_LISTENING);
+          } catch (e) {
+            // Already started or other error
+          }
+        }
+      }
+    } else {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+      if (currentState !== VoiceState.IDLE) {
+        setState(VoiceState.IDLE);
+      }
     }
 
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (recognitionRef.current) {
-        recognitionRef.current.onend = null;
-        try { recognitionRef.current.stop(); } catch (e) {}
-      }
     };
-  }, [initRecognition]);
+  }, [initRecognition, isVoiceEnabled, state, setState]);
 
   return {
     start: startRecognition,

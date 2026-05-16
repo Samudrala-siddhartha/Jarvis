@@ -62,9 +62,13 @@ export default function ParticleEngine() {
 
       particles.current.forEach((p, i) => {
         let baseColor = '0, 180, 255'; 
-        if (mood === Mood.ALERT) baseColor = '0, 80, 255'; 
-        if (mood === Mood.SUCCESS) baseColor = '0, 255, 180'; 
+        if (mood === Mood.ALERT) baseColor = '255, 50, 50'; 
+        if (mood === Mood.SUCCESS) baseColor = '50, 255, 150'; 
         if (mood === Mood.THINKING) baseColor = '150, 100, 255'; 
+        if (mood === Mood.CONCERNED) baseColor = '255, 150, 50';
+        if (mood === Mood.ELATED) baseColor = '255, 255, 100';
+        if (mood === Mood.SERIOUS) baseColor = '100, 100, 255';
+        if (mood === Mood.PLAYFUL) baseColor = '255, 100, 255';
 
         // Orbital Rotation
         p.angle += p.speed;

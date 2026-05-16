@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { ShieldCheck, Activity, Cpu, Fingerprint, Scan, BrainCircuit, Mic } from 'lucide-react';
+import { ShieldCheck, Activity, Cpu, Fingerprint, Scan, BrainCircuit, Mic, Power } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import DeviceManager from './DeviceManager';
 import BluetoothHub from './BluetoothHub';
@@ -17,7 +17,7 @@ import CelestialOrbit from './CelestialOrbit';
 export default function Dashboard() {
   const [pulse, setPulse] = useState(72);
   const [brainActivity, setBrainActivity] = useState(42);
-  const { state, setState, setTranscript } = useVoiceStore();
+  const { state, setState, setTranscript, isVoiceEnabled, setVoiceEnabled } = useVoiceStore();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -27,13 +27,8 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const triggerVoiceCommand = () => {
-    if (state === VoiceState.IDLE) {
-      setTranscript('');
-      setState(VoiceState.ACTIVE_LISTENING);
-    } else if (state === VoiceState.ACTIVE_LISTENING) {
-      setState(VoiceState.PROCESSING);
-    }
+  const toggleVoice = () => {
+    setVoiceEnabled(!isVoiceEnabled);
   };
 
   return (
@@ -111,20 +106,38 @@ export default function Dashboard() {
             transition={{ delay: 0.2 }}
             className="glass-panel p-6 rounded-3xl border-purple-500/20 relative overflow-hidden flex flex-col items-center justify-center text-center h-[240px]"
           >
+            <div className="absolute top-4 right-4">
+               <div className={`flex items-center gap-2 px-2 py-1 rounded-md border text-[8px] font-mono uppercase tracking-tighter ${
+                 isVoiceEnabled ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
+               }`}>
+                 <Power className="w-2 h-2" />
+                 {isVoiceEnabled ? 'Online' : 'Offline'}
+               </div>
+            </div>
+
             <button 
-              onClick={triggerVoiceCommand}
+              onClick={toggleVoice}
               className={`w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all ${
-                state === VoiceState.ACTIVE_LISTENING 
+                isVoiceEnabled 
                   ? 'bg-purple-500 border-white shadow-[0_0_30px_#fff]' 
-                  : 'bg-purple-500/10 border-purple-400/40 hover:bg-purple-500/20'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
               }`}
             >
-              <Mic className={`w-8 h-8 ${state === VoiceState.ACTIVE_LISTENING ? 'text-black animate-pulse' : 'text-purple-400'}`} />
+              <Mic className={`w-8 h-8 ${isVoiceEnabled ? 'text-black animate-pulse' : 'text-white/20'}`} />
             </button>
             <div className="mt-4">
-              <h3 className="text-white font-medium tracking-tight">Voice Command</h3>
-              <p className="text-[10px] font-mono text-purple-500/60 uppercase tracking-widest">Manual Override</p>
+              <h3 className="text-white font-medium tracking-tight">Vocal Interface</h3>
+              <p className="text-[10px] font-mono text-purple-500/60 uppercase tracking-widest">Manual Activation</p>
             </div>
+            {isVoiceEnabled && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-2 text-[8px] font-mono text-purple-400 animate-pulse uppercase tracking-[0.2em]"
+              >
+                Neural Link Active
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Astrology Intelligence */}
@@ -152,4 +165,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

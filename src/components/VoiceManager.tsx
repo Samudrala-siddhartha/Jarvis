@@ -18,7 +18,9 @@ export default function VoiceManager() {
     setTranscript, 
     errorMessage, 
     setErrorMessage, 
-    isUplinkStable 
+    isUplinkStable,
+    isVoiceEnabled,
+    setVoiceEnabled
   } = useVoiceStore();
   
   const { speak, cancel } = useSpeechSynthesis();
@@ -42,14 +44,14 @@ export default function VoiceManager() {
    * Manual system activation/deactivation
    */
   const handleManualTrigger = () => {
-    if (state === VoiceState.ACTIVE_LISTENING) {
-      const currentTranscript = useVoiceStore.getState().transcript;
-      handleCommand(currentTranscript);
-    } else if (state === VoiceState.RESPONDING) {
+    if (state === VoiceState.RESPONDING) {
       cancel();
+      setState(VoiceState.IDLE);
     } else {
-      setTranscript('');
-      setState(VoiceState.ACTIVE_LISTENING);
+      setVoiceEnabled(!isVoiceEnabled);
+      if (!isVoiceEnabled) {
+        setTranscript('');
+      }
     }
   };
 
@@ -107,21 +109,16 @@ export default function VoiceManager() {
         {/* Toggle voice recognition */}
         <button
           onClick={() => {
-            if (state === VoiceState.IDLE) {
-              setState(VoiceState.WAKE_LISTENING);
-            } else {
-              setState(VoiceState.IDLE);
-              cancel();
-            }
+            setVoiceEnabled(!isVoiceEnabled);
           }}
           className={`p-2 rounded-full border transition-all ${
-            state !== VoiceState.IDLE 
+            isVoiceEnabled 
               ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400' 
               : 'bg-white/5 border-white/10 text-white/30 hover:text-white'
           }`}
-          title={state !== VoiceState.IDLE ? "Deactivate Neural Link" : "Activate Neural Link"}
+          title={isVoiceEnabled ? "Deactivate Neural Link" : "Activate Neural Link"}
         >
-          {state !== VoiceState.IDLE ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+          {isVoiceEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
         </button>
 
         <button

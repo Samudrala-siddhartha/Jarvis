@@ -1,6 +1,8 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Lightbulb, Thermometer, Wind, Home, Power, RefreshCw, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useJarvisApi } from '../hooks/useJarvisApi';
+import { useVoiceStore } from '../store/voiceStore';
 
 interface Automation {
   id: string;
@@ -12,37 +14,49 @@ interface Automation {
 }
 
 export default function SmartHomeManager() {
+  const { vocalize } = useJarvisApi();
+  const { isVoiceEnabled } = useVoiceStore();
   const [automations, setAutomations] = useState<Automation[]>([
     { id: '1', name: 'Ambient Lighting', status: 'active', trigger: 'Low natural light detected', action: 'Adjusted to 2700K Warm White', icon: Lightbulb },
     { id: '2', name: 'Climate Control', status: 'idle', trigger: 'Room occupancy: High', action: 'Lowered fan speed by 15%', icon: Thermometer },
     { id: '3', name: 'Air Purification', status: 'pending', trigger: 'Particulate spike detected', action: 'Activating HEPA filter', icon: Wind },
   ]);
 
+  const reportStatus = useCallback(async (automation: Automation) => {
+    if (!isVoiceEnabled) return;
+    const report = `${automation.name} status shift: ${automation.action}`;
+    vocalize(report);
+  }, [isVoiceEnabled, vocalize]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setAutomations(prev => {
-        const updated = prev.map(a => {
-          if (Math.random() > 0.85) {
-            const statuses: ('active' | 'pending' | 'idle')[] = ['active', 'pending', 'idle'];
+        const statuses: ('active' | 'pending' | 'idle')[] = ['active', 'pending', 'idle'];
+        const targetIndex = Math.floor(Math.random() * prev.length);
+        
+        return prev.map((a, i) => {
+          if (i === targetIndex && Math.random() > 0.85) {
             const newStatus = statuses[Math.floor(Math.random() * statuses.length)];
-            
-            // Proactive Learning Simulation
             const actionPrefix = newStatus === 'active' ? 'Neural Link Optimized: ' : 'Learning Cycle: ';
             const currentAction = a.action.split(': ').pop() || a.action;
-            
-            return { 
+            const updated = { 
               ...a, 
               status: newStatus,
               action: `${actionPrefix}${currentAction}`
             };
+            
+            if (newStatus === 'active') {
+              reportStatus(updated);
+            }
+            
+            return updated;
           }
           return a;
         });
-        return updated;
       });
-    }, 4000);
+    }, 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [reportStatus]);
 
   return (
     <div className="glass-panel p-6 rounded-3xl border-white/10 h-full">

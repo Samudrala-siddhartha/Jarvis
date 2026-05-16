@@ -5,7 +5,7 @@
  */
 
 import { useCallback } from 'react';
-import { useVoiceStore, VoiceState } from '../store/voiceStore';
+import { useVoiceStore, VoiceState, Mood } from '../store/voiceStore';
 
 export function useJarvisApi() {
   const { 
@@ -14,8 +14,67 @@ export function useJarvisApi() {
     setErrorMessage, 
     addInteraction, 
     setMapConfig,
+    setMood,
+    isVoiceEnabled,
     history 
   } = useVoiceStore();
+
+  /**
+   * Vocalize text using high-fidelity TTS relay with browser fallback
+   */
+  const vocalize = useCallback(async (text: string) => {
+    if (!text) return;
+    try {
+      const response = await fetch('/api/jarvis/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.substring(0, 500) })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.audio) {
+          const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`);
+          await audio.play().catch(e => {
+            console.warn("[JARVIS] High-fidelity playback prevented, falling back:", e.message);
+            browserFallback(text);
+          });
+          return data.audio;
+        }
+      } else if (response.status === 429 || response.status === 500) {
+        console.warn("[JARVIS] Neural relay exhausted or offline. Switching to local vocalization.");
+        browserFallback(text);
+      } else {
+        throw new Error('Vocal relay error');
+      }
+    } catch (err) {
+      console.error("[Vocal Relay Error] Falling back to browser TTS:", err);
+      browserFallback(text);
+      return null;
+    }
+  }, []);
+
+  const browserFallback = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 0.9;
+    
+    const voices = window.speechSynthesis.getVoices();
+    // Prefer professional male sounding British voices for JARVIS feel
+    const jarvisVoice = voices.find(v => 
+      v.name.includes('Daniel') || 
+      v.name.includes('Google UK English Male') ||
+      v.name.includes('Microsoft James')
+    ) || voices[0];
+    
+    if (jarvisVoice) utterance.voice = jarvisVoice;
+    window.speechSynthesis.speak(utterance);
+  };
 
   /**
    * Processes a command through the neural core.
@@ -66,11 +125,19 @@ export function useJarvisApi() {
               setMapConfig({ center: { lat, lng }, zoom: zoom || 15, title });
             }
           }
+          if (call.name === 'update_mood') {
+            setMood(call.args.mood as Mood);
+          }
         }
       }
 
       setResponse(data.response);
       addInteraction(transcript, data.response);
+      
+      if (isVoiceEnabled && data.response) {
+        vocalize(data.response);
+      }
+      
       return data.response;
     } catch (err) {
       clearTimeout(timeout);
@@ -80,7 +147,7 @@ export function useJarvisApi() {
       setTimeout(() => setState(VoiceState.IDLE), 3000);
       return null;
     }
-  }, [history, setState, setResponse, addInteraction, setErrorMessage, setMapConfig]);
+  }, [history, setState, setResponse, addInteraction, setErrorMessage, setMapConfig, setMood, isVoiceEnabled, vocalize]);
 
   /**
    * Processes a streaming command through the neural core.
@@ -157,6 +224,9 @@ export function useJarvisApi() {
                       setMapConfig({ center: { lat, lng }, zoom: zoom || 15, title });
                     }
                   }
+                  if (call.name === 'update_mood') {
+                    setMood(call.args.mood as Mood);
+                  }
                 }
               }
             } catch (e) {
@@ -169,34 +239,18 @@ export function useJarvisApi() {
       onComplete(fullText);
       addInteraction(message, fullText);
       setState(VoiceState.RESPONDING);
+      
+      if (isVoiceEnabled && fullText) {
+        vocalize(fullText);
+      }
+      
       return fullText;
     } catch (err) {
       console.error("[Stream Error]", err);
       setState(VoiceState.ERROR);
       return null;
     }
-  }, [history, setState, addInteraction, setMapConfig]);
-
-  /**
-   * Vocalize text using high-fidelity TTS relay
-   */
-  const vocalize = useCallback(async (text: string) => {
-    if (!text) return;
-    try {
-      const response = await fetch('/api/jarvis/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.substring(0, 500) })
-      });
-      
-      if (!response.ok) throw new Error('Vocal relay error');
-      const data = await response.json();
-      return data.audio;
-    } catch (err) {
-      console.error("[Vocal Relay Error]", err);
-      return null;
-    }
-  }, []);
+  }, [history, setState, addInteraction, setMapConfig, setMood, isVoiceEnabled, vocalize]);
 
   return { processCommand, processCommandStream, vocalize };
 }

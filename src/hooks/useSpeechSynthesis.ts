@@ -19,7 +19,7 @@ export function useSpeechSynthesis() {
       if (response.ok) {
         const data = await response.json();
         if (data.audio) {
-          const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
+          const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`);
           audioRef.current = audio;
           
           return new Promise((resolve) => {
@@ -28,15 +28,18 @@ export function useSpeechSynthesis() {
               resolve(true);
             };
             audio.onerror = () => {
-              // Fallback to browser TTS if audio playback fails
+              console.warn("[JARVIS] High-fidelity playback error, falling back.");
               fallbackToBrowser(text, resolve);
             };
             audio.play().catch(() => fallbackToBrowser(text, resolve));
           });
         }
+      } else if (response.status === 429) {
+        console.warn("[JARVIS] Neural relay exhausted. Protocol: Switching to local vocalization.");
+        return new Promise((resolve) => fallbackToBrowser(text, resolve));
       }
       
-      // Fallback if API fails
+      // Fallback if API fails (general error)
       return new Promise((resolve) => fallbackToBrowser(text, resolve));
     } catch (err) {
       console.error('TTS API error, falling back:', err);

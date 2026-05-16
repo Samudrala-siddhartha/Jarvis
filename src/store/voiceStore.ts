@@ -13,7 +13,11 @@ export enum Mood {
   NORMAL = 'normal',
   ALERT = 'alert',
   SUCCESS = 'success',
-  THINKING = 'thinking'
+  THINKING = 'thinking',
+  CONCERNED = 'concerned',
+  ELATED = 'elated',
+  SERIOUS = 'serious',
+  PLAYFUL = 'playful'
 }
 
 interface VoiceStore {
@@ -23,6 +27,7 @@ interface VoiceStore {
   response: string;
   errorMessage: string | null;
   isWakeEnabled: boolean;
+  isVoiceEnabled: boolean;
   isUplinkStable: boolean;
   isMapOpen: boolean;
   mapConfig: { center: { lat: number, lng: number }, zoom: number, title?: string } | null;
@@ -33,9 +38,12 @@ interface VoiceStore {
   setTranscript: (transcript: string) => void;
   setResponse: (response: string) => void;
   setWakeEnabled: (enabled: boolean) => void;
+  setVoiceEnabled: (enabled: boolean) => void;
   setUplinkStable: (stable: boolean) => void;
   setMapConfig: (config: { center: { lat: number, lng: number }, zoom: number, title?: string } | null) => void;
   addInteraction: (command: string, response: string) => void;
+  isChatOpen: boolean;
+  setIsChatOpen: (isOpen: boolean) => void;
   reset: () => void;
 }
 
@@ -46,8 +54,10 @@ export const useVoiceStore = create<VoiceStore>((set) => ({
   response: '',
   errorMessage: null,
   isWakeEnabled: true,
+  isVoiceEnabled: false,
   isUplinkStable: false,
   isMapOpen: false,
+  isChatOpen: false,
   mapConfig: null,
   history: [],
   setState: (state) => set({ state }),
@@ -56,6 +66,8 @@ export const useVoiceStore = create<VoiceStore>((set) => ({
   setTranscript: (transcript) => set({ transcript }),
   setResponse: (response) => set({ response }),
   setWakeEnabled: (isWakeEnabled) => set({ isWakeEnabled }),
+  setVoiceEnabled: (isVoiceEnabled) => set({ isVoiceEnabled }),
+  setIsChatOpen: (isChatOpen) => set({ isChatOpen }),
   setUplinkStable: (isUplinkStable) => set({ isUplinkStable }),
   setMapConfig: (mapConfig) => set({ mapConfig, isMapOpen: !!mapConfig }),
   addInteraction: (command, response) => set((state) => ({
