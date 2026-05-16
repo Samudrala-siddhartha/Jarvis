@@ -1,6 +1,11 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceStore, VoiceState } from '../store/voiceStore';
 
+/**
+ * SubtitlePanel Component
+ * Provides real-time visual feedback of user speech and assistant responses.
+ * Uses high-fidelity cinematic styling consistent with Project Alpha-Omega.
+ */
 export default function SubtitlePanel() {
   const { transcript, response, state } = useVoiceStore();
 

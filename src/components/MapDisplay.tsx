@@ -5,7 +5,13 @@ import { X, Navigation, LocateFixed, Maximize2, Minimize2 } from 'lucide-react';
 import { useVoiceStore } from '../store/voiceStore';
 
 const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const HAS_VALID_KEY = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
 
+/**
+ * MapDisplay Component
+ * Tactical geographic overlay powered by Google Maps Platform.
+ * Features: Live location tracking, full-screen toggle, dark-mode styling, and scanline effects.
+ */
 export default function MapDisplay() {
   const { isMapOpen, mapConfig, setMapConfig } = useVoiceStore();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -39,7 +45,34 @@ export default function MapDisplay() {
     }
   };
 
-  if (!isMapOpen || !currentLocation) return null;
+  if (!isMapOpen) return null;
+
+  if (!HAS_VALID_KEY) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="fixed z-[60] bottom-24 right-4 md:right-8 w-[90vw] md:w-[400px] glass-panel rounded-2xl p-6 border-amber-500/30"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-amber-400 font-mono text-xs uppercase tracking-widest">Maps Setup Required</h3>
+          <button onClick={handleClose} className="p-1 hover:bg-white/10 rounded">
+            <X className="w-4 h-4 text-white/50" />
+          </button>
+        </div>
+        <p className="text-[10px] text-white/60 leading-relaxed mb-4">
+          Google Maps Platform key is missing. Deploy encrypted uplink via secrets panel.
+        </p>
+        <div className="space-y-2 text-[8px] font-mono uppercase tracking-tighter text-amber-400/80">
+          <p>1. Open Settings (Gear Icon)</p>
+          <p>2. Select 'Secrets'</p>
+          <p>3. Add 'GOOGLE_MAPS_PLATFORM_KEY'</p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (!currentLocation) return null;
 
   return (
     <motion.div
@@ -87,7 +120,6 @@ export default function MapDisplay() {
           <Map
             center={currentLocation}
             zoom={mapConfig?.zoom || 15}
-            mapId="JARVIS_TACTICAL_MAP"
             disableDefaultUI={true}
             internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
             style={{ width: '100%', height: '100%' }}

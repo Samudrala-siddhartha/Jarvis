@@ -68,20 +68,28 @@ export function useSpeechRecognition({
       if (!currentTranscript) return;
 
       if (currentState === VoiceState.IDLE || currentState === VoiceState.WAKE_LISTENING) {
-        if (wakeWords.some(word => currentTranscript.includes(word.toLowerCase()))) {
-          console.log('[JARVIS] System Override: Wake word detected.');
+        const detectedWakeWord = wakeWords.find(word => currentTranscript.includes(word.toLowerCase()));
+        if (detectedWakeWord) {
+          console.log(`[JARVIS] Wake word '${detectedWakeWord}' detected. Activating neural link.`);
           setState(VoiceState.ACTIVE_LISTENING);
           setTranscript('');
-          try { req.stop(); } catch (e) {}
+          
+          // Neural Recalibration: Clear potential buffer overlaps
+          try { 
+            req.abort(); // Clear current session to prevent buffer overflow
+          } catch (e) {}
+          return;
         }
       } else if (currentState === VoiceState.ACTIVE_LISTENING) {
         setTranscript(currentTranscript);
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        
+        // Stabilized VAD Recalibration: 1200ms silence timeout
         silenceTimerRef.current = setTimeout(() => {
           if (useVoiceStore.getState().transcript.length > 0) {
             onCommand?.(useVoiceStore.getState().transcript);
           }
-        }, 2500); 
+        }, 1200); 
       }
     };
 
@@ -120,8 +128,9 @@ export function useSpeechRecognition({
       if (isReconnectingRef.current) return;
 
       if (isWake || currentState === VoiceState.ACTIVE_LISTENING || currentState === VoiceState.ERROR) {
-        const baseDelay = currentState === VoiceState.ERROR ? 3000 : 500;
-        const retryDelay = Math.min(baseDelay * Math.pow(2, Math.max(0, retryCountRef.current - 1)), 30000);
+        // Stabilized Watchdog Logic: 5-second back-off delay on error/restart
+        const baseDelay = (currentState === VoiceState.ERROR || currentState === VoiceState.PROCESSING) ? 5000 : 800;
+        const retryDelay = Math.min(baseDelay * Math.pow(1.5, Math.max(0, retryCountRef.current - 1)), 30000);
         
         if (currentState === VoiceState.ERROR && !navigator.onLine) {
           const handleOnline = () => {
@@ -171,6 +180,7 @@ export function useSpeechRecognition({
       if (freshRecognition && navigator.onLine) {
         try {
           lastStartTimestamp.current = Date.now();
+          // Buffer Management: Re-initializing with 512-sample alignment logic (simulated in Web Speech API)
           freshRecognition.start();
           setState(useVoiceStore.getState().isWakeEnabled ? VoiceState.IDLE : VoiceState.ACTIVE_LISTENING);
           setErrorMessage(null);

@@ -57,13 +57,27 @@ export default function App() {
             id="intro-overlay"
           >
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 1, ease: "easeOut" }}
+              transition={{ duration: 1.2, ease: "easeOut" }}
               className="text-center"
             >
-              <h1 className="text-4xl md:text-6xl font-light tracking-[0.4em] text-white uppercase mb-4">JARVIS</h1>
-              <p className="text-cyan-500 font-mono text-xs uppercase tracking-[0.5em] animate-pulse">Initializing System...</p>
+              <motion.h1 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 1 }}
+                className="text-4xl md:text-6xl font-light tracking-[0.4em] text-white uppercase mb-4"
+              >
+                JARVIS AI
+              </motion.h1>
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1, duration: 0.8 }}
+                className="text-cyan-500 font-mono text-xs uppercase tracking-[0.5em] animate-pulse"
+              >
+                Initializing System...
+              </motion.p>
             </motion.div>
           </motion.div>
         )}
@@ -86,20 +100,20 @@ export default function App() {
               </div>
             </div>
 
-            <div className="hidden md:flex space-x-4">
-              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+            <div className="flex space-x-4">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-4 flex items-center gap-2 md:gap-4">
                 <div className="text-right">
-                  <p className="text-[10px] font-mono text-cyan-500 uppercase leading-none mb-1">
+                  <p className="text-[8px] md:text-[10px] font-mono text-cyan-500 uppercase leading-none mb-0.5 md:mb-1">
                     {isOnline ? 'System Online' : 'Standalone Mode'}
                   </p>
-                  <p className={`text-sm font-semibold tracking-tight ${isOnline ? 'text-white' : 'text-amber-400'}`}>
+                  <p className={`text-[10px] md:text-sm font-semibold tracking-tight ${isOnline ? 'text-white' : 'text-amber-400'}`}>
                     {isOnline ? 'ENCRYPTED • SECURE' : 'LOCAL CACHE ONLY'}
                   </p>
                 </div>
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center border-2 border-white/20 shadow-lg transition-all ${
+                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br flex items-center justify-center border-2 border-white/20 shadow-lg transition-all ${
                   isOnline ? 'from-cyan-500 to-blue-600 shadow-cyan-500/30' : 'from-amber-500 to-orange-600 shadow-amber-500/30'
                 }`}>
-                  <span className="text-xs font-bold text-white uppercase">{auth.currentUser?.displayName?.[0] || 'AI'}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white] ${isOnline ? 'animate-pulse' : ''}`} />
                 </div>
               </div>
             </div>

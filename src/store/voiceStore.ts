@@ -9,8 +9,16 @@ export enum VoiceState {
   ERROR = 'ERROR'
 }
 
+export enum Mood {
+  NORMAL = 'normal',
+  ALERT = 'alert',
+  SUCCESS = 'success',
+  THINKING = 'thinking'
+}
+
 interface VoiceStore {
   state: VoiceState;
+  mood: Mood;
   transcript: string;
   response: string;
   errorMessage: string | null;
@@ -20,6 +28,7 @@ interface VoiceStore {
   mapConfig: { center: { lat: number, lng: number }, zoom: number, title?: string } | null;
   history: { role: 'user' | 'model', parts: { text: string }[] }[];
   setState: (state: VoiceState) => void;
+  setMood: (mood: Mood) => void;
   setErrorMessage: (msg: string | null) => void;
   setTranscript: (transcript: string) => void;
   setResponse: (response: string) => void;
@@ -32,6 +41,7 @@ interface VoiceStore {
 
 export const useVoiceStore = create<VoiceStore>((set) => ({
   state: VoiceState.IDLE,
+  mood: Mood.NORMAL,
   transcript: '',
   response: '',
   errorMessage: null,
@@ -41,6 +51,7 @@ export const useVoiceStore = create<VoiceStore>((set) => ({
   mapConfig: null,
   history: [],
   setState: (state) => set({ state }),
+  setMood: (mood) => set({ mood }),
   setErrorMessage: (errorMessage) => set({ errorMessage }),
   setTranscript: (transcript) => set({ transcript }),
   setResponse: (response) => set({ response }),

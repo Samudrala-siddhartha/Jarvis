@@ -11,6 +11,11 @@ interface BTDevice {
   device?: any; // Using any for BluetoothDevice to avoid missing global types
 }
 
+/**
+ * BluetoothHub Component
+ * Advanced wireless connectivity hub for Project Alpha-Omega.
+ * Supports real Web Bluetooth API discovery with fallback hardware emulation for non-secure contexts.
+ */
 export default function BluetoothHub() {
   const [isScanning, setIsScanning] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);

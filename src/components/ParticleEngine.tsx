@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { useVoiceStore, VoiceState } from '../store/voiceStore';
+import { useVoiceStore, VoiceState, Mood } from '../store/voiceStore';
 
 export default function ParticleEngine() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { state } = useVoiceStore();
+  const { state, mood } = useVoiceStore();
   const particles = useRef<any[]>([]);
   const animationFrame = useRef<number>(0);
 
@@ -21,74 +21,103 @@ export default function ParticleEngine() {
     };
 
     const initParticles = () => {
-      particles.current = Array.from({ length: 150 }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        size: Math.random() * 2 + 1,
-        color: 'rgba(0, 240, 255, 0.4)',
-        pulse: Math.random() * Math.PI * 2,
-        t: Math.random() * 100
-      }));
+      particles.current = Array.from({ length: 180 }, (_, i) => {
+        // Create 3 distinct concentric rings
+        const ring = i % 3;
+        const baseRadius = 100 + ring * 100;
+        const angle = Math.random() * Math.PI * 2;
+        return {
+          x: canvas.width / 2 + Math.cos(angle) * baseRadius,
+          y: canvas.height / 2 + Math.sin(angle) * baseRadius,
+          vx: 0,
+          vy: 0,
+          size: ring === 0 ? 3 : ring === 1 ? 2 : 1,
+          color: 'rgba(0, 180, 255, 0.4)',
+          angle: angle,
+          radius: baseRadius,
+          baseRadius: baseRadius,
+          speed: (0.0005 + Math.random() * 0.0015) * (ring === 0 ? 1 : ring === 1 ? -1 : 0.5),
+          ring: ring
+        };
+      });
+    };
+
+    const mouse = { x: 0, y: 0, active: false, pulse: 0 };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+      mouse.active = true;
+    };
+
+    const handleClick = () => {
+      mouse.pulse = 1;
     };
 
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; 
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       
+      if (mouse.pulse > 0) mouse.pulse -= 0.02;
+
       particles.current.forEach((p, i) => {
-        // State-based behavior
+        let baseColor = '0, 180, 255'; 
+        if (mood === Mood.ALERT) baseColor = '0, 80, 255'; 
+        if (mood === Mood.SUCCESS) baseColor = '0, 255, 180'; 
+        if (mood === Mood.THINKING) baseColor = '150, 100, 255'; 
+
+        // Orbital Rotation
+        p.angle += p.speed;
+        
+        // Add some "breathing" effect to radii
+        const breathing = Math.sin(Date.now() * 0.001 + p.ring) * 10;
+        const targetRadius = p.baseRadius + breathing + (mouse.pulse * 100);
+        
+        const tx = canvas.width / 2 + Math.cos(p.angle) * targetRadius;
+        const ty = canvas.height / 2 + Math.sin(p.angle) * targetRadius;
+
+        // Smooth transition to target
+        p.x += (tx - p.x) * 0.05;
+        p.y += (ty - p.y) * 0.05;
+
+        // Mouse Interactivity
+        if (mouse.active) {
+          const dx = mouse.x - p.x;
+          const dy = mouse.y - p.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 200) {
+            const force = (200 - dist) / 200;
+            p.x -= dx * force * 0.2;
+            p.y -= dy * force * 0.2;
+          }
+        }
+
+        // State behavior
         switch (state) {
-          case VoiceState.IDLE:
-            p.x += p.vx;
-            p.y += p.vy;
-            break;
-          case VoiceState.WAKE_LISTENING:
-            // Pulse towards center
-            const dx = canvas.width / 2 - p.x;
-            const dy = canvas.height / 2 - p.y;
-            p.x += dx * 0.01 + p.vx;
-            p.y += dy * 0.01 + p.vy;
-            p.color = `rgba(0, 240, 255, ${0.4 + Math.sin(Date.now() / 200) * 0.3})`;
-            break;
           case VoiceState.ACTIVE_LISTENING:
-            // Wave motion
-            p.y += Math.sin(p.x * 0.01 + Date.now() * 0.005) * 2;
-            p.x += p.vx * 2;
-            p.color = 'rgba(0, 240, 255, 0.8)';
+            p.x += (Math.random() - 0.5) * 5;
+            p.y += (Math.random() - 0.5) * 5;
+            p.color = `rgba(${baseColor}, 0.9)`;
             break;
           case VoiceState.PROCESSING:
-            // Orbital neural movement
-            const angle = (Date.now() / 1000) + (i * (Math.PI * 2 / particles.current.length));
-            const radius = 100 + Math.sin(Date.now() / 500) * 20;
-            p.x = canvas.width / 2 + Math.cos(angle) * radius;
-            p.y = canvas.height / 2 + Math.sin(angle) * radius;
-            p.color = 'rgba(255, 255, 255, 0.6)';
+            p.angle += p.speed * 5;
+            p.color = `rgba(255, 255, 255, 0.8)`;
             break;
           case VoiceState.RESPONDING:
-            // Explosive sync pulse
-            const growth = Math.sin(Date.now() / 100) * 10;
-            p.x += p.vx * 5;
-            p.y += p.vy * 5;
-            p.size = (Math.random() * 3 + 1) + (growth > 0 ? growth : 0);
-            p.color = 'rgba(0, 240, 255, 0.5)';
+            const pulse = Math.sin(Date.now() * 0.1) * 20;
+            p.radius = p.baseRadius + pulse;
+            p.color = `rgba(${baseColor}, 0.7)`;
             break;
         }
 
-        // Wrap around
-        if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.y > canvas.height) p.y = 0;
-
-        // Draw connections for Idle/Wake
-        if (state === VoiceState.IDLE || state === VoiceState.WAKE_LISTENING) {
+        // Draw mesh connections for the innermost ring
+        if (p.ring === 0) {
           particles.current.forEach((p2, j) => {
-            if (i === j) return;
+            if (i >= j || p2.ring !== 0) return;
             const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
-            if (dist < 100) {
+            if (dist < 120) {
               ctx.beginPath();
-              ctx.strokeStyle = `rgba(0, 240, 255, ${0.1 * (1 - dist / 100)})`;
+              ctx.strokeStyle = `rgba(${baseColor}, ${0.15 * (1 - dist / 120)})`;
               ctx.moveTo(p.x, p.y);
               ctx.lineTo(p2.x, p2.y);
               ctx.stroke();
@@ -97,8 +126,8 @@ export default function ParticleEngine() {
         }
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
+        ctx.arc(p.x, p.y, p.size + (mouse.pulse * 2), 0, Math.PI * 2);
+        ctx.fillStyle = p.color || `rgba(${baseColor}, 0.5)`;
         ctx.fill();
       });
 
@@ -106,11 +135,15 @@ export default function ParticleEngine() {
     };
 
     window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('click', handleClick);
     resize();
     animate();
 
     return () => {
       window.removeEventListener('resize', resize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('click', handleClick);
       cancelAnimationFrame(animationFrame.current);
     };
   }, [state]);

@@ -1,82 +1,46 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useVoiceStore, VoiceState } from '../store/voiceStore';
 import { Mic, MicOff, Volume2, ShieldAlert, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
+import { useJarvisApi } from '../hooks/useJarvisApi';
 
+/**
+ * VoiceManager Component
+ * The elite neural control interface for JARVIS. 
+ * Handles voice wake-word detection, active listening, and system state feedback.
+ */
 export default function VoiceManager() {
-  const { state, setState, setTranscript, setResponse, addInteraction, history, errorMessage, setErrorMessage, isUplinkStable, setMapConfig } = useVoiceStore();
-  const { speak, cancel } = useSpeechSynthesis();
+  const { 
+    state, 
+    setState, 
+    setTranscript, 
+    errorMessage, 
+    setErrorMessage, 
+    isUplinkStable 
+  } = useVoiceStore();
   
+  const { speak, cancel } = useSpeechSynthesis();
+  const { processCommand } = useJarvisApi();
+  
+  /**
+   * Neural pulse handler for voice commands
+   */
   const handleCommand = useCallback(async (transcript: string) => {
-    if (!transcript) return;
-    
-    setState(VoiceState.PROCESSING);
-    
-    // Safety timeout to prevent stuck state
-    const timeout = setTimeout(() => {
-      if (useVoiceStore.getState().state === VoiceState.PROCESSING) {
-        setState(VoiceState.IDLE);
-        setErrorMessage('Processing timed out. Systems resetting...');
-      }
-    }, 15000);
-
-    try {
-      const res = await fetch('/api/jarvis/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: transcript, history })
-      });
-      
-      clearTimeout(timeout);
-      
-      if (!res.ok) throw new Error('Neural link failure');
-      
-      const data = await res.json();
-
-      // Handle Map Tooling
-      if (data.functionCalls) {
-        for (const call of data.functionCalls) {
-          if (call.name === 'display_map') {
-            const { lat, lng, zoom, title, isLiveLocation } = call.args;
-            if (isLiveLocation) {
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  setMapConfig({ 
-                    center: { lat: pos.coords.latitude, lng: pos.coords.longitude }, 
-                    zoom: zoom || 15, 
-                    title: title || 'Real-time Position' 
-                  });
-                },
-                () => {
-                  setErrorMessage('Location restricted. Secure link required.');
-                }
-              );
-            } else if (lat && lng) {
-              setMapConfig({ center: { lat, lng }, zoom: zoom || 15, title });
-            }
-          }
-        }
-      }
-
-      setResponse(data.response);
-      addInteraction(transcript, data.response);
-      
-      await speak(data.response);
-    } catch (err) {
-      clearTimeout(timeout);
-      console.error(err);
-      setState(VoiceState.ERROR);
-      setErrorMessage('Uplink failed. Local systems active.');
-      setTimeout(() => setState(VoiceState.IDLE), 3000);
+    const responseText = await processCommand(transcript);
+    if (responseText) {
+      await speak(responseText);
     }
-  }, [history, setState, setResponse, addInteraction, speak]);
+  }, [processCommand, speak]);
 
   const { isSupported, reconnect } = useSpeechRecognition({
     onCommand: handleCommand,
   });
 
+  /**
+   * Manual system activation/deactivation
+   */
   const handleManualTrigger = () => {
     if (state === VoiceState.ACTIVE_LISTENING) {
       const currentTranscript = useVoiceStore.getState().transcript;
@@ -119,7 +83,7 @@ export default function VoiceManager() {
               ))}
             </div>
             <span className="text-cyan-400 font-mono text-[8px] uppercase tracking-tighter font-bold whitespace-nowrap">
-              {errorMessage || state.replace('_', ' ')}
+              {errorMessage || (state === VoiceState.WAKE_LISTENING ? "Waiting for 'JARVIS'..." : state.replace('_', ' '))}
             </span>
             {isUplinkStable && !errorMessage && state !== VoiceState.ERROR && (
               <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" title="Neural Uplink Stable" />
@@ -201,7 +165,9 @@ export default function VoiceManager() {
                   className={`w-2 h-2 rounded-full transition-all duration-500 ${
                     state === VoiceState.ACTIVE_LISTENING 
                       ? 'bg-cyan-400 scale-[2.5] shadow-[0_0_15px_#22d3ee]' 
-                      : 'bg-white/40 scale-100'
+                      : state === VoiceState.WAKE_LISTENING
+                        ? 'bg-cyan-400/60 scale-[1.5] shadow-[0_0_10px_#22d3ee] animate-pulse'
+                        : 'bg-white/40 scale-100'
                   }`}
                 />
               )}
@@ -209,11 +175,11 @@ export default function VoiceManager() {
           </div>
 
           {/* Scanning Pulse */}
-          {state === VoiceState.ACTIVE_LISTENING && (
+          {(state === VoiceState.ACTIVE_LISTENING || state === VoiceState.WAKE_LISTENING) && (
             <motion.div 
               initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1.5, opacity: 0 }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
+              animate={{ scale: state === VoiceState.ACTIVE_LISTENING ? 1.5 : 1.2, opacity: 0 }}
+              transition={{ duration: state === VoiceState.ACTIVE_LISTENING ? 1.5 : 3, repeat: Infinity, ease: "easeOut" }}
               className="absolute inset-0 rounded-full border-2 border-cyan-400/50"
             />
           )}

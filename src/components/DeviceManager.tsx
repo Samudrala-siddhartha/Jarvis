@@ -18,6 +18,11 @@ const devices: Device[] = [
   { id: 'fans_1', name: 'Air Circulation', type: 'ventilation', icon: Wind, state: { speed: 2, on: true } },
 ];
 
+/**
+ * DeviceManager Component
+ * Sophisticated control matrix for IoT and peripheral systems in the Alpha-Omega environment.
+ * Handles state management for lighting, HVAC, and security systems.
+ */
 export default function DeviceManager() {
   const [deviceList, setDeviceList] = useState<Device[]>(devices);
   const [selectedId, setSelectedId] = useState<string | null>(null);

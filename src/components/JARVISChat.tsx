@@ -1,24 +1,30 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Mic, X, MessageSquare, Bot, Paperclip, Volume2, VolumeX, Camera, MicOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useVoiceStore, VoiceState } from '../store/voiceStore';
-import { db, auth } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { db, auth, OperationType, handleFirestoreError } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useJarvisApi } from '../hooks/useJarvisApi';
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+/**
+ * Interface Message Definition
+ */
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  file?: { name: string, mimeType: string };
 }
 
+/**
+ * JARVISChat Component
+ * The primary text-based interactive terminal for Project Alpha-Omega.
+ * Supports multimodal input (camera, files), real-time streaming, and vocalization.
+ */
 export default function JARVISChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string, file?: { name: string, mimeType: string } }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ data: string, mimeType: string, name: string, textContent?: string } | null>(null);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -28,12 +34,17 @@ export default function JARVISChat() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
   const { setState } = useVoiceStore();
+  const { processCommandStream, vocalize } = useJarvisApi();
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
+  /**
+   * Initialize speech recognition for the chat terminal
+   */
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -47,8 +58,6 @@ export default function JARVISChat() {
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         setInput(transcript);
-        // We'll let handleSend take care of sending if the user wants to confirm
-        // Or we could auto-send. Let's auto-send for JARVIS vibe.
         handleSend(undefined, transcript);
       };
 
@@ -108,84 +117,13 @@ export default function JARVISChat() {
     }
   }, [messages]);
 
-  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
-    const errInfo = {
-      error: error instanceof Error ? error.message : String(error),
-      authInfo: {
-        userId: auth.currentUser?.uid,
-        email: auth.currentUser?.email,
-      },
-      operationType,
-      path
-    };
-    console.error('Firestore Error: ', JSON.stringify(errInfo));
-    throw new Error(JSON.stringify(errInfo));
-  };
-
-  const saveMessageToFirestore = async (role: 'user' | 'assistant', content: string) => {
-    if (!auth.currentUser) return;
-    try {
-      await addDoc(collection(db, 'chats'), {
-        userId: auth.currentUser.uid,
-        role,
-        content,
-        timestamp: serverTimestamp(),
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'chats');
-    }
-  };
-
-  const playResponseVoice = async (text: string) => {
-    if (!isVoiceEnabled || !text) return;
-    
-    // Stop any currently playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-
-    try {
-      const response = await fetch('/api/jarvis/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.substring(0, 500) }) // Limit text length for TTS
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Speech synthesis failed with status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.audio && typeof data.audio === 'string') {
-        const audioSrc = `data:audio/mp3;base64,${data.audio}`;
-        const audio = new Audio();
-        
-        audio.oncanplaythrough = () => {
-          audioRef.current = audio;
-          audio.play().catch(e => console.warn('Audio playback blocked by browser:', e));
-        };
-        
-        audio.onerror = (e) => {
-          console.error('Audio object failed to load source:', e);
-        };
-
-        audio.src = audioSrc;
-      }
-    } catch (error) {
-      console.error('Voice synthesis failed:', error);
-    }
-  };
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement> | React.DragEvent | ClipboardEvent) => {
-    let file: File | null | undefined;
+    let file: File | null = null;
     
-    if ('files' in e && e.files) {
-      file = e.files?.[0];
-    } else if ('clipboardData' in e && e.clipboardData) {
-      file = e.clipboardData.files?.[0];
+    if ('files' in e && (e as any).files) {
+      file = (e as any).files?.[0];
+    } else if ('clipboardData' in e && (e as any).clipboardData) {
+      file = (e as any).clipboardData.files?.[0];
     } else if ('target' in e && (e.target as HTMLInputElement).files) {
       file = (e.target as HTMLInputElement).files?.[0];
     }
@@ -201,14 +139,13 @@ export default function JARVISChat() {
       const reader = new FileReader();
       
       if (isText) {
-        // Read as text for analysis
         reader.onload = (readerEvent) => {
           const textContent = readerEvent.target?.result as string;
           setSelectedFile({
-            data: btoa(textContent), // We'll still send base64 or just content
+            data: btoa(textContent),
             mimeType: file!.type || 'text/plain',
             name: file!.name,
-            textContent: textContent // Send raw text for the prompt
+            textContent: textContent
           });
         };
         reader.readAsText(file);
@@ -228,7 +165,7 @@ export default function JARVISChat() {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     if (e.clipboardData.files.length > 0) {
-      handleFileChange(e.nativeEvent);
+      handleFileChange(e.nativeEvent as any);
     }
   };
 
@@ -247,9 +184,49 @@ export default function JARVISChat() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFileChange(e);
+    handleFileChange(e as any);
   };
 
+  /**
+   * Tactical Data Backup: Persist interactions to Firestore
+   */
+  const saveMessageToFirestore = useCallback(async (role: 'user' | 'assistant', content: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'chats'), {
+        userId: auth.currentUser.uid,
+        role,
+        content,
+        timestamp: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'chats');
+    }
+  }, []);
+
+  /**
+   * Vocalize AI response using the high-fidelity Zephyr relay
+   */
+  const playResponseVoice = async (text: string) => {
+    if (!isVoiceEnabled || !text) return;
+    
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    const audioData = await vocalize(text);
+    if (audioData) {
+      const audio = new Audio(`data:audio/mp3;base64,${audioData}`);
+      audioRef.current = audio;
+      audio.play().catch(e => console.warn('Vocal relay blocked:', e));
+    }
+  };
+
+  /**
+   * Dispatches data packets to the core.
+   * Handles text, files, and camera streams.
+   */
   const handleSend = async (e?: React.FormEvent, directInput?: string) => {
     e?.preventDefault();
     const finalInput = directInput || input;
@@ -258,7 +235,6 @@ export default function JARVISChat() {
     const userMsg = finalInput;
     const currentFile = selectedFile;
     
-    // Construct prompt if file is text
     let promptContent = userMsg;
     if (currentFile?.textContent) {
       promptContent = `[Source File Analysis: ${currentFile.name}]\n\nContent:\n\`\`\`\n${currentFile.textContent}\n\`\`\`\n\nUser Request: ${userMsg || "Please analyze this file."}`;
@@ -273,87 +249,27 @@ export default function JARVISChat() {
     }]);
     
     setIsTyping(true);
-    setState(VoiceState.PROCESSING);
-
-    // Save user message
     saveMessageToFirestore('user', userMsg || `[File: ${currentFile?.name}]`);
 
-    if (!navigator.onLine) {
-      setTimeout(() => {
-        const fallback = "I'm afraid the neural link is currently severed, Sir. I'm operating in standalone mode. Once a stable connection is established, I will be able to process your request.";
-        setMessages(prev => [...prev, { role: 'assistant', content: fallback }]);
+    const assistantMsgIndex = messages.length + 1;
+    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
+    await processCommandStream({
+      message: promptContent,
+      file: currentFile?.textContent ? undefined : currentFile,
+      onChunk: (chunk) => {
+        setMessages(prev => {
+          const next = [...prev];
+          next[assistantMsgIndex].content += chunk;
+          return next;
+        });
+      },
+      onComplete: (fullText) => {
         setIsTyping(false);
-        setState(VoiceState.IDLE);
-      }, 1000);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/jarvis/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: promptContent, 
-          file: currentFile?.textContent ? undefined : currentFile, // If it's text, we already included it in prompt
-          history: messages.slice(-6).map(m => ({ 
-            role: m.role, 
-            parts: [{ text: m.content }] 
-          }))
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMsg = data.error || "An unexpected error occurred in the neural link, Sir.";
-        setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }]);
-        return;
+        saveMessageToFirestore('assistant', fullText);
+        if (isVoiceEnabled) playResponseVoice(fullText);
       }
-
-      // Handle Map Tooling
-      if (data.functionCalls) {
-        const { setMapConfig } = useVoiceStore.getState();
-        for (const call of data.functionCalls) {
-          if (call.name === 'display_map') {
-            const { lat, lng, zoom, title, isLiveLocation } = call.args;
-            if (isLiveLocation) {
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  setMapConfig({ 
-                    center: { lat: pos.coords.latitude, lng: pos.coords.longitude }, 
-                    zoom: zoom || 15, 
-                    title: title || 'Real-time Position' 
-                  });
-                },
-                () => {
-                  console.warn("Location permission denied");
-                }
-              );
-            } else if (lat && lng) {
-              setMapConfig({ center: { lat, lng }, zoom: zoom || 15, title });
-            }
-          }
-        }
-      }
-
-      const assistantResponse = data.response || "I'm listening, Sir, but I have nothing to add at this moment.";
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantResponse }]);
-      saveMessageToFirestore('assistant', assistantResponse);
-      
-      setState(VoiceState.RESPONDING);
-      
-      if (isVoiceEnabled) {
-        await playResponseVoice(assistantResponse);
-      }
-      
-      setTimeout(() => setState(VoiceState.IDLE), 3000);
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "Communication error, Sir. I'm having trouble reaching the core." }]);
-    } finally {
-      setIsTyping(false);
-    }
+    });
   };
 
   return (

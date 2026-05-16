@@ -5,6 +5,15 @@ import DeviceManager from './DeviceManager';
 import BluetoothHub from './BluetoothHub';
 import { useVoiceStore, VoiceState } from '../store/voiceStore';
 
+import TelemetryDashboard from './TelemetryDashboard';
+import SmartHomeManager from './SmartHomeManager';
+import CelestialOrbit from './CelestialOrbit';
+
+/**
+ * Dashboard Component
+ * The central command matrix displaying real-time biometric and neural telemetry.
+ * Serves as the primary visual display for Project Alpha-Omega.
+ */
 export default function Dashboard() {
   const [pulse, setPulse] = useState(72);
   const [brainActivity, setBrainActivity] = useState(42);
@@ -29,12 +38,13 @@ export default function Dashboard() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-8 mt-24 flex flex-col gap-8 pb-32">
+      {/* Top Level Telemetry */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Biometric Status */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="glass-panel p-6 rounded-3xl border-cyan-500/20 relative overflow-hidden"
+          className="glass-panel p-6 rounded-3xl border-cyan-500/20 relative overflow-hidden interactive-card"
         >
           <div className="flex items-center gap-4 mb-8">
             <div className="p-3 rounded-2xl bg-cyan-500/10 text-cyan-400">
@@ -77,98 +87,67 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Neural Activity */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="glass-panel p-6 rounded-3xl border-blue-500/20 relative overflow-hidden"
-        >
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-400">
-              <BrainCircuit className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-white font-medium tracking-tight">Neural Bandwidth</h3>
-              <p className="text-[10px] font-mono text-blue-500/60 uppercase tracking-widest">Cloud Processing</p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex justify-between text-[10px] font-mono uppercase tracking-widest">
-                <span className="text-white/30">Synaptic Load</span>
-                <span className="text-blue-400">{brainActivity}%</span>
-              </div>
-              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
-                  animate={{ width: `${brainActivity}%` }}
-                  className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
-                <p className="text-[9px] font-mono text-white/30 uppercase mb-1">Latency</p>
-                <p className="text-sm font-medium text-white tracking-tight">12ms</p>
-              </div>
-              <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
-                <p className="text-[9px] font-mono text-white/30 uppercase mb-1">Uptime</p>
-                <p className="text-sm font-medium text-white tracking-tight">100%</p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Voice Command Center */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className="glass-panel p-6 rounded-3xl border-purple-500/20 relative overflow-hidden flex flex-col items-center justify-center text-center"
-        >
-          <button 
-            onClick={triggerVoiceCommand}
-            className={`w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all ${
-              state === VoiceState.ACTIVE_LISTENING 
-                ? 'bg-purple-500 border-white shadow-[0_0_30px_#fff]' 
-                : 'bg-purple-500/10 border-purple-400/40 hover:bg-purple-500/20'
-            }`}
-          >
-            <Mic className={`w-8 h-8 ${state === VoiceState.ACTIVE_LISTENING ? 'text-black animate-pulse' : 'text-purple-400'}`} />
-          </button>
-          <div className="mt-4">
-            <h3 className="text-white font-medium tracking-tight">Voice Command</h3>
-            <p className="text-[10px] font-mono text-purple-500/60 uppercase tracking-widest">Manual Override</p>
-          </div>
-          {state === VoiceState.ACTIVE_LISTENING && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-2 text-[10px] font-mono text-white animate-pulse"
-            >
-              Uplink Engaged...
-            </motion.div>
-          )}
-        </motion.div>
+        {/* Advanced Telemetry Graphs */}
+        <div className="md:col-span-2">
+           <TelemetryDashboard />
+        </div>
       </div>
 
+      {/* Middle Section: Automations & Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-6">
             <Cpu className="w-5 h-5 text-cyan-400" />
+            <h2 className="text-lg font-light text-white tracking-tighter uppercase tracking-[0.2em]">Smart Domain Automations</h2>
+          </div>
+          <SmartHomeManager />
+        </div>
+        
+        <div className="flex flex-col gap-8">
+          {/* Quick Voice Access */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="glass-panel p-6 rounded-3xl border-purple-500/20 relative overflow-hidden flex flex-col items-center justify-center text-center h-[240px]"
+          >
+            <button 
+              onClick={triggerVoiceCommand}
+              className={`w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all ${
+                state === VoiceState.ACTIVE_LISTENING 
+                  ? 'bg-purple-500 border-white shadow-[0_0_30px_#fff]' 
+                  : 'bg-purple-500/10 border-purple-400/40 hover:bg-purple-500/20'
+              }`}
+            >
+              <Mic className={`w-8 h-8 ${state === VoiceState.ACTIVE_LISTENING ? 'text-black animate-pulse' : 'text-purple-400'}`} />
+            </button>
+            <div className="mt-4">
+              <h3 className="text-white font-medium tracking-tight">Voice Command</h3>
+              <p className="text-[10px] font-mono text-purple-500/60 uppercase tracking-widest">Manual Override</p>
+            </div>
+          </motion.div>
+
+          {/* Astrology Intelligence */}
+          <CelestialOrbit />
+
+          {/* Comms */}
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <Activity className="w-5 h-5 text-blue-400" />
+              <h2 className="text-lg font-light text-white tracking-tighter uppercase tracking-[0.2em]">External Comms</h2>
+            </div>
+            <BluetoothHub />
+          </div>
+        </div>
+      </div>
+
+      {/* Control Matrix */}
+      <div className="w-full">
+         <div className="flex items-center gap-3 mb-6">
+            <Cpu className="w-5 h-5 text-cyan-400" />
             <h2 className="text-lg font-light text-white tracking-tighter uppercase tracking-[0.2em]">Node Control Matrix</h2>
           </div>
-          <DeviceManager />
-        </div>
-        <div>
-          <div className="flex items-center gap-3 mb-6">
-            <Activity className="w-5 h-5 text-blue-400" />
-            <h2 className="text-lg font-light text-white tracking-tighter uppercase tracking-[0.2em]">External Comms</h2>
-          </div>
-          <BluetoothHub />
-        </div>
+        <DeviceManager />
       </div>
     </div>
   );
